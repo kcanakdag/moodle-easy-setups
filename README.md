@@ -39,11 +39,12 @@ For automation or if you know what you want:
 | Flag | Description | Default |
 |------|-------------|---------|
 | `-v, --version` | Moodle version (e.g., 4.0) | interactive |
-| `-d, --domain` | Domain or IP address | localhost |
+| `-d, --domain` | Domain or IP address | auto-detected IP |
 | `-p, --port` | Port number | 8000 |
 | `-s, --https` | Use HTTPS in wwwroot | no |
 | `-b, --bind` | Bind address | 0.0.0.0 |
 | `-l, --list` | List available versions | - |
+| `--status` | Show deployment status | - |
 | `-h, --help` | Show help | - |
 
 ## After Deployment

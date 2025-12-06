@@ -13,8 +13,20 @@ VERSIONS_DIR="$SCRIPT_DIR/versions"
 
 # Default values
 DEFAULT_PORT=8000
-DEFAULT_DOMAIN="localhost"
 DEFAULT_PROTOCOL="http"
+
+# Auto-detect public IP
+detect_public_ip() {
+    local ip=""
+    # Try multiple services in case one is down
+    ip=$(curl -s --max-time 3 ifconfig.me 2>/dev/null) || \
+    ip=$(curl -s --max-time 3 icanhazip.com 2>/dev/null) || \
+    ip=$(curl -s --max-time 3 ipecho.net/plain 2>/dev/null) || \
+    ip="localhost"
+    echo "$ip"
+}
+
+DEFAULT_DOMAIN="$(detect_public_ip)"
 
 print_banner() {
     echo -e "${BLUE}"
@@ -130,6 +142,122 @@ list_versions() {
     echo "${versions[@]}"
 }
 
+# Detect existing deployment
+detect_existing_deployment() {
+    local found_version=""
+    local found_wwwroot=""
+    local is_running=false
+    
+    for dir in "$VERSIONS_DIR"/*/; do
+        if [ -d "$dir" ]; then
+            local version=$(basename "$dir")
+            local config_file="$dir/moodle/config.php"
+            
+            # Check if config.php exists and has wwwroot
+            if [ -f "$config_file" ]; then
+                found_wwwroot=$(grep -oP "\\\$CFG->wwwroot\s*=\s*'\K[^']+" "$config_file" 2>/dev/null || true)
+                if [ -n "$found_wwwroot" ]; then
+                    found_version="$version"
+                    
+                    # Check if containers are running
+                    cd "$dir"
+                    if docker compose ps 2>/dev/null | grep -q "Up"; then
+                        is_running=true
+                    fi
+                    cd - > /dev/null
+                    break
+                fi
+            fi
+        fi
+    done
+    
+    if [ -n "$found_version" ]; then
+        echo "$found_version|$found_wwwroot|$is_running"
+    fi
+}
+
+# Handle existing deployment
+handle_existing_deployment() {
+    local existing=$(detect_existing_deployment)
+    
+    if [ -z "$existing" ]; then
+        return 1  # No existing deployment
+    fi
+    
+    local version=$(echo "$existing" | cut -d'|' -f1)
+    local wwwroot=$(echo "$existing" | cut -d'|' -f2)
+    local running=$(echo "$existing" | cut -d'|' -f3)
+    
+    echo -e "\n${YELLOW}Existing deployment detected:${NC}"
+    echo "  Version: Moodle $version"
+    echo "  URL:     $wwwroot"
+    if [ "$running" = "true" ]; then
+        echo -e "  Status:  ${GREEN}Running${NC}"
+    else
+        echo -e "  Status:  ${RED}Stopped${NC}"
+    fi
+    echo ""
+    
+    echo "What would you like to do?"
+    echo "  1) Reconfigure (change domain/port)"
+    echo "  2) Restart containers"
+    echo "  3) Stop containers"
+    echo "  4) Full reset (delete data and redeploy)"
+    echo "  5) Deploy a different version"
+    echo "  6) Exit"
+    echo ""
+    
+    while true; do
+        read -p "Select option (1-6): " choice
+        case $choice in
+            1)
+                SELECTED_VERSION="$version"
+                return 1  # Continue with normal config flow
+                ;;
+            2)
+                SELECTED_VERSION="$version"
+                cd "$VERSIONS_DIR/$version"
+                log_info "Restarting containers..."
+                $COMPOSE_CMD restart
+                log_success "Containers restarted!"
+                echo -e "\n  Moodle URL: ${BLUE}$wwwroot${NC}"
+                exit 0
+                ;;
+            3)
+                cd "$VERSIONS_DIR/$version"
+                log_info "Stopping containers..."
+                $COMPOSE_CMD down
+                log_success "Containers stopped."
+                exit 0
+                ;;
+            4)
+                SELECTED_VERSION="$version"
+                cd "$VERSIONS_DIR/$version"
+                log_warn "This will delete all Moodle data!"
+                read -p "Are you sure? (yes/no): " confirm
+                if [ "$confirm" = "yes" ]; then
+                    log_info "Removing containers and volumes..."
+                    $COMPOSE_CMD down -v
+                    log_success "Reset complete."
+                    return 1  # Continue with fresh deploy
+                else
+                    log_info "Cancelled."
+                    exit 0
+                fi
+                ;;
+            5)
+                return 1  # Continue with version selection
+                ;;
+            6)
+                exit 0
+                ;;
+            *)
+                log_warn "Invalid selection. Try again."
+                ;;
+        esac
+    done
+}
+
 # Select version interactively
 select_version() {
     local versions=($(list_versions))
@@ -161,7 +289,10 @@ select_version() {
 get_config() {
     echo -e "\n${BLUE}Deployment Configuration:${NC}"
     
-    # Domain/IP
+    # Domain/IP (show detected IP)
+    if [ "$DEFAULT_DOMAIN" != "localhost" ]; then
+        log_info "Detected public IP: $DEFAULT_DOMAIN"
+    fi
     read -p "Enter domain or IP (default: $DEFAULT_DOMAIN): " input_domain
     DOMAIN="${input_domain:-$DEFAULT_DOMAIN}"
     
@@ -321,17 +452,19 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  -v, --version VERSION   Moodle version to deploy (e.g., 4.0)"
-    echo "  -d, --domain DOMAIN     Domain or IP address (default: localhost)"
+    echo "  -d, --domain DOMAIN     Domain or IP address (default: auto-detected public IP)"
     echo "  -p, --port PORT         Port number (default: 8000)"
     echo "  -s, --https             Use HTTPS protocol"
     echo "  -b, --bind ADDRESS      Bind address (default: 0.0.0.0)"
     echo "  -l, --list              List available versions"
+    echo "  --status                Show current deployment status"
     echo "  -h, --help              Show this help"
     echo ""
     echo "Examples:"
     echo "  $0                                    # Interactive mode"
     echo "  $0 -v 4.0 -d example.com -p 80       # Non-interactive"
     echo "  $0 --list                             # List versions"
+    echo "  $0 --status                           # Check deployment status"
 }
 
 # Parse command line arguments
@@ -366,6 +499,25 @@ parse_args() {
                 for v in $(list_versions); do
                     echo "  - $v"
                 done
+                exit 0
+                ;;
+            --status)
+                check_docker_compose
+                existing=$(detect_existing_deployment)
+                if [ -z "$existing" ]; then
+                    echo "No deployment found."
+                else
+                    version=$(echo "$existing" | cut -d'|' -f1)
+                    wwwroot=$(echo "$existing" | cut -d'|' -f2)
+                    running=$(echo "$existing" | cut -d'|' -f3)
+                    echo "Version: Moodle $version"
+                    echo "URL:     $wwwroot"
+                    if [ "$running" = "true" ]; then
+                        echo "Status:  Running"
+                    else
+                        echo "Status:  Stopped"
+                    fi
+                fi
                 exit 0
                 ;;
             -h|--help)
@@ -403,7 +555,15 @@ main() {
     check_docker_compose
     
     if [ "$INTERACTIVE" = true ]; then
-        select_version
+        # Check for existing deployment first
+        if handle_existing_deployment; then
+            exit 0  # Handled by the function
+        fi
+        
+        # If no version selected yet (new deploy or "deploy different version")
+        if [ -z "$SELECTED_VERSION" ]; then
+            select_version
+        fi
         get_config
     else
         # Validate version exists
