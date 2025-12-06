@@ -1,0 +1,67 @@
+version: "3.8"
+
+x-env: &default-env
+  # Lets Moodle know it's running under the moodle-docker style env
+  MOODLE_DOCKER_RUNNING: "1"
+
+services:
+  db:
+    image: postgres:15.14
+    container_name: moodle_db
+    environment:
+      POSTGRES_USER: moodle
+      POSTGRES_PASSWORD: m@0dl3ing
+      POSTGRES_DB: moodle
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U moodle -d moodle"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+
+  web:
+    # MoodleHQ’s PHP+Apache image compatible with Moodle 4.0 (PHP 8.0 is supported)
+    image: moodlehq/moodle-php-apache:8.0-bullseye
+    container_name: moodle_web
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *default-env
+      MOODLE_DOCKER_DBTYPE: pgsql
+      MOODLE_DOCKER_DBHOST: db
+      MOODLE_DOCKER_DBNAME: moodle
+      MOODLE_DOCKER_DBUSER: moodle
+      MOODLE_DOCKER_DBPASS: m@0dl3ing
+
+    ports:
+      # Change the left side if 8000 is taken; keep right side as 80
+      - "127.0.0.1:8000:80"
+    volumes:
+      # Mount Moodle code (must be the 4.0 branch / 4.0.x release)
+      - ./moodle:/var/www/html:Z
+      # Standard writable dirs (precreated and owned by www-data in the image)
+      - moodledata:/var/www/moodledata:Z
+      - phpunitdata:/var/www/phpunitdata:Z
+      - behatdata:/var/www/behatdata:Z
+
+  mail:
+    # Catch-all SMTP + web UI (Mailpit is what moodle-docker uses now)
+    image: axllent/mailpit:latest
+    container_name: moodle_mail
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+    ports:
+      - "127.0.0.1:8025:8025"   # Web UI
+      - "127.0.0.1:1025:1025"   # SMTP
+    restart: unless-stopped
+
+volumes:
+  dbdata:
+  moodledata:
+  phpunitdata:
+  behatdata:
