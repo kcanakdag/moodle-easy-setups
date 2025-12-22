@@ -319,17 +319,19 @@ get_config() {
     read -p "Enter domain or IP (default: $DEFAULT_DOMAIN): " input_domain
     DOMAIN="${input_domain:-$DEFAULT_DOMAIN}"
     
-    # Port
-    read -p "Enter port (default: $DEFAULT_PORT): " input_port
-    PORT="${input_port:-$DEFAULT_PORT}"
-    
     # Protocol
     read -p "Use HTTPS? (y/n, default: n): " use_https
     if [[ "$use_https" =~ ^[Yy]$ ]]; then
         PROTOCOL="https"
+        TEMP_DEFAULT_PORT=443
     else
         PROTOCOL="http"
+        TEMP_DEFAULT_PORT=$DEFAULT_PORT
     fi
+
+    # Port
+    read -p "Enter port (default: $TEMP_DEFAULT_PORT): " input_port
+    PORT="${input_port:-$TEMP_DEFAULT_PORT}"
     
     # Build wwwroot
     if [ "$PORT" = "80" ] || [ "$PORT" = "443" ]; then
