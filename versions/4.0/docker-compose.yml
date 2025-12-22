@@ -37,8 +37,9 @@ services:
       MOODLE_DOCKER_DBUSER: moodle
       MOODLE_DOCKER_DBPASS: m@0dl3ing
 
-    ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8000}:80"
+    # Port 80 is handled by Caddy
+    expose:
+      - "80"
     volumes:
       # Mount Moodle code (must be the 4.0 branch / 4.0.x release)
       - ./moodle:/var/www/html:Z
@@ -46,6 +47,21 @@ services:
       - moodledata:/var/www/moodledata:Z
       - phpunitdata:/var/www/phpunitdata:Z
       - behatdata:/var/www/behatdata:Z
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: moodle_proxy
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8000}:${WEB_PORT:-8000}"
+      - "${BIND_ADDRESS:-0.0.0.0}:${EXTRA_PORT_443:-443}:443"
+      - "${BIND_ADDRESS:-0.0.0.0}:${EXTRA_PORT_80:-80}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
 
   mail:
     # Catch-all SMTP + web UI (Mailpit is what moodle-docker uses now)
@@ -64,3 +80,5 @@ volumes:
   moodledata:
   phpunitdata:
   behatdata:
+  caddy_data:
+  caddy_config:
