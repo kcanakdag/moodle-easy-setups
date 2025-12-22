@@ -202,13 +202,16 @@ handle_existing_deployment() {
     echo "  1) Reconfigure (change domain/port)"
     echo "  2) Restart containers"
     echo "  3) Stop containers"
-    echo "  4) Full reset (delete data and redeploy)"
-    echo "  5) Deploy a different version"
-    echo "  6) Exit"
+    echo "  4) View Logs"
+    echo "  5) Shell Access (Web container)"
+    echo "  6) Reset Admin Password"
+    echo "  7) Full reset (delete data and redeploy)"
+    echo "  8) Deploy a different version"
+    echo "  9) Exit"
     echo ""
     
     while true; do
-        read -p "Select option (1-6): " choice
+        read -p "Select option (1-9): " choice
         case $choice in
             1)
                 SELECTED_VERSION="$version"
@@ -231,6 +234,23 @@ handle_existing_deployment() {
                 exit 0
                 ;;
             4)
+                cd "$VERSIONS_DIR/$version"
+                $COMPOSE_CMD logs -f
+                exit 0
+                ;;
+            5)
+                cd "$VERSIONS_DIR/$version"
+                log_info "Entering web container shell..."
+                $COMPOSE_CMD exec web bash
+                exit 0
+                ;;
+            6)
+                cd "$VERSIONS_DIR/$version"
+                log_info "Moodle Admin Password Reset"
+                $COMPOSE_CMD exec -u www-data web php admin/cli/reset_password.php
+                exit 0
+                ;;
+            7)
                 SELECTED_VERSION="$version"
                 cd "$VERSIONS_DIR/$version"
                 log_warn "This will delete all Moodle data!"
@@ -245,10 +265,10 @@ handle_existing_deployment() {
                     exit 0
                 fi
                 ;;
-            5)
+            8)
                 return 1  # Continue with version selection
                 ;;
-            6)
+            9)
                 exit 0
                 ;;
             *)
@@ -490,6 +510,8 @@ deploy() {
     echo "    $COMPOSE_CMD logs -f      # View logs"
     echo "    $COMPOSE_CMD down         # Stop Moodle"
     echo "    $COMPOSE_CMD up -d        # Start Moodle"
+    echo "    $COMPOSE_CMD exec web bash # Shell access"
+    echo "    $COMPOSE_CMD exec -u www-data web php admin/cli/reset_password.php # Reset admin password"
     echo ""
 }
 
