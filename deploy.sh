@@ -208,13 +208,16 @@ handle_existing_deployment() {
     echo "  4) View Logs"
     echo "  5) Shell Access (Web container)"
     echo "  6) Reset Admin Password"
-    echo "  7) Full reset (delete data and redeploy)"
-    echo "  8) Deploy a different version"
-    echo "  9) Exit"
+    echo "  7) Purge Caches"
+    echo "  8) Toggle Developer Mode (Debug)"
+    echo "  9) Fix File Permissions"
+    echo "  10) Full reset (delete data and redeploy)"
+    echo "  11) Deploy a different version"
+    echo "  12) Exit"
     echo ""
     
     while true; do
-        read -p "Select option (1-9): " choice
+        read -p "Select option (1-12): " choice
         case $choice in
             1)
                 SELECTED_VERSION="$version"
@@ -254,6 +257,38 @@ handle_existing_deployment() {
                 exit 0
                 ;;
             7)
+                cd "$VERSIONS_DIR/$version"
+                log_info "Purging Moodle caches..."
+                $COMPOSE_CMD exec -u www-data web php admin/cli/purge_caches.php
+                log_success "Caches purged!"
+                exit 0
+                ;;
+            8)
+                cd "$VERSIONS_DIR/$version"
+                local config_file="moodle/config.php"
+                if grep -q "debug =" "$config_file"; then
+                    log_info "Disabling Developer Mode..."
+                    sed -i "/debug =/d" "$config_file"
+                    sed -i "/debugdisplay =/d" "$config_file"
+                    log_success "Developer mode disabled."
+                else
+                    log_info "Enabling Developer Mode..."
+                    # Insert before setup.php
+                    sed -i "/require_once.*setup\.php/i \$CFG->debug = (E_ALL | E_STRICT);\n\$CFG->debugdisplay = 1;" "$config_file"
+                    log_success "Developer mode enabled."
+                fi
+                $COMPOSE_CMD exec -u www-data web php admin/cli/purge_caches.php
+                exit 0
+                ;;
+            9)
+                cd "$VERSIONS_DIR/$version"
+                log_info "Fixing file permissions..."
+                sudo chown -R www-data:www-data moodle
+                sudo chmod -R 775 moodle
+                log_success "Permissions updated."
+                exit 0
+                ;;
+            10)
                 SELECTED_VERSION="$version"
                 cd "$VERSIONS_DIR/$version"
                 log_warn "This will delete all Moodle data!"
@@ -268,10 +303,10 @@ handle_existing_deployment() {
                     exit 0
                 fi
                 ;;
-            8)
+            11)
                 return 1  # Continue with version selection
                 ;;
-            9)
+            12)
                 exit 0
                 ;;
             *)
@@ -545,6 +580,7 @@ deploy() {
     echo "    $COMPOSE_CMD up -d        # Start Moodle"
     echo "    $COMPOSE_CMD exec web bash # Shell access"
     echo "    $COMPOSE_CMD exec -u www-data web php admin/cli/reset_password.php # Reset admin password"
+    echo "    $COMPOSE_CMD exec -u www-data web php admin/cli/purge_caches.php # Purge caches"
     echo ""
 }
 
