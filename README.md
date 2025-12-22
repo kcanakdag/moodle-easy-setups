@@ -53,6 +53,9 @@ For automation or if you know what you want:
 | `-p, --port` | Port number | 8000 |
 | `-s, --https` | Use HTTPS in wwwroot | no |
 | `-b, --bind` | Bind address | 0.0.0.0 |
+| `--admin-user` | Admin username | admin |
+| `--admin-pass` | Admin password | Moodle123! |
+| `--admin-email` | Admin email | admin@example.com |
 | `-l, --list` | List available versions | - |
 | `--status` | Show deployment status | - |
 | `-h, --help` | Show help | - |

@@ -14,6 +14,9 @@ VERSIONS_DIR="$SCRIPT_DIR/versions"
 # Default values
 DEFAULT_PORT=8000
 DEFAULT_PROTOCOL="http"
+DEFAULT_ADMIN_USER="admin"
+DEFAULT_ADMIN_PASS="Moodle123!"
+DEFAULT_ADMIN_EMAIL="admin@example.com"
 
 # Auto-detect public IP
 detect_public_ip() {
@@ -342,11 +345,22 @@ get_config() {
     else
         BIND_ADDRESS="0.0.0.0"
     fi
+
+    echo -e "\n${BLUE}Admin Account Configuration:${NC}"
+    read -p "Admin username (default: $DEFAULT_ADMIN_USER): " input_admin_user
+    ADMIN_USER="${input_admin_user:-$DEFAULT_ADMIN_USER}"
+    
+    read -p "Admin password (default: $DEFAULT_ADMIN_PASS): " input_admin_pass
+    ADMIN_PASS="${input_admin_pass:-$DEFAULT_ADMIN_PASS}"
+    
+    read -p "Admin email (default: $DEFAULT_ADMIN_EMAIL): " input_admin_email
+    ADMIN_EMAIL="${input_admin_email:-$DEFAULT_ADMIN_EMAIL}"
     
     echo -e "\n${BLUE}Configuration Summary:${NC}"
     echo "  Version:  Moodle $SELECTED_VERSION"
     echo "  URL:      $WWWROOT"
     echo "  Bind:     $BIND_ADDRESS:$PORT"
+    echo "  Admin:    $ADMIN_USER / $ADMIN_PASS"
     echo ""
     
     read -p "Proceed with deployment? (y/n): " confirm
@@ -493,12 +507,29 @@ deploy() {
         log_error "Some containers failed to start. Check logs with: docker compose logs"
         exit 1
     fi
+
+    # Run Moodle CLI Installer
+    log_info "Running Moodle CLI installer (this may take a minute)..."
+    # We use install_database.php because we already generated config.php
+    if $COMPOSE_CMD exec -u www-data web php admin/cli/install_database.php \
+        --adminuser="$ADMIN_USER" \
+        --adminpass="$ADMIN_PASS" \
+        --adminemail="$ADMIN_EMAIL" \
+        --fullname="Moodle $SELECTED_VERSION Test Site" \
+        --shortname="Moodle$SELECTED_VERSION" \
+        --agree-license; then
+        log_success "Moodle database installed successfully!"
+    else
+        log_warn "CLI installer finished with an error. You might need to finish installation via web UI."
+    fi
     
     echo -e "\n${GREEN}════════════════════════════════════════════${NC}"
     echo -e "${GREEN}  Deployment Complete!${NC}"
     echo -e "${GREEN}════════════════════════════════════════════${NC}"
     echo ""
     echo -e "  Moodle URL:    ${BLUE}$WWWROOT${NC}"
+    echo -e "  Admin User:    ${YELLOW}$ADMIN_USER${NC}"
+    echo -e "  Admin Pass:    ${YELLOW}$ADMIN_PASS${NC}"
     echo -e "  Mailpit UI:    ${BLUE}http://${DOMAIN}:8025${NC}"
     echo ""
     echo -e "  ${YELLOW}First time? Run the Moodle installer at the URL above.${NC}"
@@ -525,6 +556,9 @@ show_help() {
     echo "  -p, --port PORT         Port number (default: 8000)"
     echo "  -s, --https             Use HTTPS protocol"
     echo "  -b, --bind ADDRESS      Bind address (default: 0.0.0.0)"
+    echo "  --admin-user USER       Admin username (default: admin)"
+    echo "  --admin-pass PASS       Admin password (default: Moodle123!)"
+    echo "  --admin-email EMAIL     Admin email (default: admin@example.com)"
     echo "  -l, --list              List available versions"
     echo "  --status                Show current deployment status"
     echo "  -h, --help              Show this help"
@@ -561,6 +595,18 @@ parse_args() {
                 ;;
             -b|--bind)
                 BIND_ADDRESS="$2"
+                shift 2
+                ;;
+            --admin-user)
+                ADMIN_USER="$2"
+                shift 2
+                ;;
+            --admin-pass)
+                ADMIN_PASS="$2"
+                shift 2
+                ;;
+            --admin-email)
+                ADMIN_EMAIL="$2"
                 shift 2
                 ;;
             -l|--list)
@@ -606,6 +652,9 @@ parse_args() {
     PORT="${PORT:-$DEFAULT_PORT}"
     PROTOCOL="${PROTOCOL:-$DEFAULT_PROTOCOL}"
     BIND_ADDRESS="${BIND_ADDRESS:-0.0.0.0}"
+    ADMIN_USER="${ADMIN_USER:-$DEFAULT_ADMIN_USER}"
+    ADMIN_PASS="${ADMIN_PASS:-$DEFAULT_ADMIN_PASS}"
+    ADMIN_EMAIL="${ADMIN_EMAIL:-$DEFAULT_ADMIN_EMAIL}"
     
     # Build wwwroot
     if [ "$PORT" = "80" ] || [ "$PORT" = "443" ]; then
