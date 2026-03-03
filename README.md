@@ -110,6 +110,38 @@ docker compose down -v
 
 Or re-run `./deploy.sh` in interactive mode to get a menu with restart/stop/reset options.
 
+## Switching to a Different Version
+
+If you already have a version deployed and want to switch (e.g., 4.5 → 5.1):
+
+```bash
+# 1. Pull the latest changes
+cd moodle-easy-setups
+git pull origin main
+
+# 2. Stop the current deployment (ports would conflict)
+cd versions/4.5
+docker compose down
+cd ../..
+
+# 3. Deploy the new version
+./deploy.sh    # choose option 11 "Deploy a different version", then pick 5.1
+```
+
+Your old data stays in its Docker volumes. To bring the old version back:
+
+```bash
+cd versions/4.5 && docker compose up -d
+```
+
+To permanently remove the old version's data:
+
+```bash
+cd versions/4.5 && docker compose down -v
+```
+
+> **Note:** This deploys a fresh instance — it does not migrate data between versions.
+
 ## Firewall Configuration
 
 If you can't access Moodle from outside, check your firewall:
