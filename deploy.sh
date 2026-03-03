@@ -156,7 +156,7 @@ get_moodle_branch() {
     local version="$1"
     local major="${version%%.*}"
     local minor="${version#*.}"
-    echo "MOODLE_${major}${minor}0_STABLE"
+    echo "MOODLE_${major}0${minor}_STABLE"
 }
 
 # Ensure Moodle source code exists, clone if missing
