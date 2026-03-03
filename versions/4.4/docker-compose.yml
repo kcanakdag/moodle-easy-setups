@@ -7,7 +7,7 @@ x-env: &default-env
 services:
   db:
     image: postgres:15.14
-    container_name: moodle_db_40
+    container_name: moodle_db_44
     environment:
       POSTGRES_USER: moodle
       POSTGRES_PASSWORD: m@0dl3ing
@@ -23,9 +23,9 @@ services:
       - "5432:5432"
 
   web:
-    # MoodleHQ’s PHP+Apache image compatible with Moodle 4.0 (PHP 8.0 is supported)
-    image: moodlehq/moodle-php-apache:8.0-bullseye
-    container_name: moodle_web_40
+    # MoodleHQ's PHP+Apache image compatible with Moodle 4.4 (PHP 8.3 is supported)
+    image: moodlehq/moodle-php-apache:8.3-bullseye
+    container_name: moodle_web_44
     depends_on:
       db:
         condition: service_healthy
@@ -41,7 +41,7 @@ services:
     expose:
       - "80"
     volumes:
-      # Mount Moodle code (must be the 4.0 branch / 4.0.x release)
+      # Mount Moodle code (must be the 4.4 branch / 4.4.x release)
       - ./moodle:/var/www/html:Z
       # Standard writable dirs (precreated and owned by www-data in the image)
       - moodledata:/var/www/moodledata:Z
@@ -50,7 +50,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: moodle_proxy_40
+    container_name: moodle_proxy_44
     restart: unless-stopped
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${WEB_PORT:-8000}:${WEB_PORT:-8000}"
@@ -66,7 +66,7 @@ services:
   mail:
     # Catch-all SMTP + web UI (Mailpit is what moodle-docker uses now)
     image: axllent/mailpit:latest
-    container_name: moodle_mail_40
+    container_name: moodle_mail_44
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"

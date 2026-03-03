@@ -1,5 +1,8 @@
 #!/bin/bash
-set -e
+set -eo pipefail
+
+# Better error diagnostics
+trap 'log_error "Script failed at line $LINENO. Command: $BASH_COMMAND"' ERR
 
 # Colors for output
 RED='\033[0;31m'
@@ -17,6 +20,8 @@ DEFAULT_PROTOCOL="http"
 DEFAULT_ADMIN_USER="admin"
 DEFAULT_ADMIN_PASS="Moodle123!"
 DEFAULT_ADMIN_EMAIL="admin@example.com"
+SELECTED_VERSION=""
+COMPOSE_CMD=""
 
 # Auto-detect public IP
 detect_public_ip() {
@@ -143,6 +148,50 @@ list_versions() {
         fi
     done
     echo "${versions[@]}"
+}
+
+# Convert version to Moodle git branch name
+# e.g., "4.1" -> "MOODLE_410_STABLE", "5.0" -> "MOODLE_500_STABLE"
+get_moodle_branch() {
+    local version="$1"
+    local major="${version%%.*}"
+    local minor="${version#*.}"
+    echo "MOODLE_${major}${minor}0_STABLE"
+}
+
+# Ensure Moodle source code exists, clone if missing
+ensure_moodle_source() {
+    local version_dir="$VERSIONS_DIR/$SELECTED_VERSION"
+    local moodle_dir="$version_dir/moodle"
+    local branch
+    branch=$(get_moodle_branch "$SELECTED_VERSION")
+
+    if [ -d "$moodle_dir" ] && [ -f "$moodle_dir/version.php" ]; then
+        log_success "Moodle source found at $moodle_dir"
+        return 0
+    fi
+
+    # Check git is available
+    if ! command -v git &> /dev/null; then
+        log_error "git is required to download Moodle source code."
+        log_error "Install it with: sudo apt-get install git (Debian/Ubuntu) or sudo dnf install git (RHEL/Fedora)"
+        exit 1
+    fi
+
+    log_info "Moodle source not found. Cloning branch $branch..."
+    log_info "This may take a few minutes depending on your connection..."
+
+    if git clone --depth 1 --branch "$branch" \
+        https://github.com/moodle/moodle.git "$moodle_dir"; then
+        log_success "Moodle $SELECTED_VERSION source cloned successfully"
+    else
+        log_error "Failed to clone Moodle source (branch: $branch)"
+        log_error "Check your internet connection and verify the branch exists:"
+        log_error "  https://github.com/moodle/moodle/tree/$branch"
+        # Clean up partial clone
+        rm -rf "$moodle_dir"
+        exit 1
+    fi
 }
 
 # Detect existing deployment
@@ -533,17 +582,20 @@ deploy() {
     log_info "Starting containers..."
     $COMPOSE_CMD up -d
     
-    # Wait for services
+    # Wait for services with polling
     log_info "Waiting for services to be ready..."
-    sleep 5
-    
-    # Check if containers are running
-    if $COMPOSE_CMD ps | grep -q "Up"; then
-        log_success "Containers are running!"
-    else
-        log_error "Some containers failed to start. Check logs with: docker compose logs"
-        exit 1
-    fi
+    local retries=30
+    local count=0
+    while ! $COMPOSE_CMD ps 2>/dev/null | grep -q "Up"; do
+        count=$((count + 1))
+        if [ $count -ge $retries ]; then
+            log_error "Services failed to start within 60 seconds"
+            log_error "Check logs with: $COMPOSE_CMD logs"
+            exit 1
+        fi
+        sleep 2
+    done
+    log_success "Containers are running!"
 
     # Run Moodle CLI Installer
     log_info "Running Moodle CLI installer (this may take a minute)..."
@@ -603,7 +655,8 @@ show_help() {
     echo ""
     echo "Examples:"
     echo "  $0                                    # Interactive mode"
-    echo "  $0 -v 4.0 -d example.com -p 80       # Non-interactive"
+    echo "  $0 -v 5.0 -d example.com -p 80       # Non-interactive"
+    echo "  $0 -v 4.5 -d example.com -p 443 -s   # HTTPS with auto-SSL"
     echo "  $0 --list                             # List versions"
     echo "  $0 --status                           # Check deployment status"
 }
@@ -725,11 +778,17 @@ main() {
         # Validate version exists
         if [ ! -d "$VERSIONS_DIR/$SELECTED_VERSION" ]; then
             log_error "Version $SELECTED_VERSION not found"
+            log_error "Available versions: $(list_versions)"
+            exit 1
+        fi
+        if [ ! -f "$VERSIONS_DIR/$SELECTED_VERSION/docker-compose.yml" ]; then
+            log_error "Version $SELECTED_VERSION is missing docker-compose.yml"
             exit 1
         fi
         log_info "Deploying Moodle $SELECTED_VERSION to $WWWROOT"
     fi
     
+    ensure_moodle_source
     generate_config
     generate_env_file
     generate_caddyfile

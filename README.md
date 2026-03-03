@@ -14,8 +14,9 @@ cd moodle-easy-setups
 ```
 
 That's it. The script will:
-- Check if Docker is installed (and offer to install it if not)
+- Check if Docker and Git are installed (and offer to install Docker if not)
 - Let you pick a Moodle version
+- Automatically download the Moodle source code if not already present
 - Ask for your domain/IP and port
 - Configure Caddy for HTTP or HTTPS (with automatic SSL)
 - Generate the config and start everything
@@ -25,14 +26,14 @@ That's it. The script will:
 For automation or if you know what you want:
 
 ```bash
-# Deploy Moodle 4.5 with HTTPS on your domain
-./deploy.sh -v 4.5 -d moodle.example.com -p 443 -s
+# Deploy Moodle 5.0 with HTTPS on your domain
+./deploy.sh -v 5.0 -d moodle.example.com -p 443 -s
 
-# Deploy Moodle 4.0 on your domain (port 80 for clean URLs)
-./deploy.sh -v 4.0 -d moodletest.example.com -p 80
+# Deploy Moodle 4.5 on your domain (port 80 for clean URLs)
+./deploy.sh -v 4.5 -d moodletest.example.com -p 80
 
 # Deploy on a custom port
-./deploy.sh -v 4.0 -d example.com -p 8080
+./deploy.sh -v 4.3 -d example.com -p 8080
 
 # Deploy using just an IP address
 ./deploy.sh -v 4.0 -d 192.168.1.100 -p 8000
@@ -125,10 +126,20 @@ sudo firewall-cmd --reload
 
 ## Available Versions
 
-- `4.0` - Moodle 4.0.x (PHP 8.0)
-- `4.5` - Moodle 4.5.x (PHP 8.3)
+| Version | PHP | Status |
+|---------|-----|--------|
+| `4.0` | 8.0 | EOL |
+| `4.1` | 8.1 | LTS (EOL Nov 2025) |
+| `4.2` | 8.2 | EOL |
+| `4.3` | 8.2 | EOL Apr 2026 |
+| `4.4` | 8.3 | EOL Oct 2026 |
+| `4.5` | 8.3 | LTS (supported until 2028) |
+| `5.0` | 8.3 | Current |
+| `5.1` | 8.3 | Latest |
 
-More versions coming. To add your own, create a folder in `versions/` with the same structure.
+Moodle source code is downloaded automatically on first deploy (~300-400MB per version).
+
+To add your own version, create a folder in `versions/` with a `docker-compose.yml` using the appropriate PHP image.
 
 ## Project Structure
 
@@ -136,17 +147,25 @@ More versions coming. To add your own, create a folder in `versions/` with the s
 .
 ├── deploy.sh              # Main deployment script
 ├── versions/
-│   └── 4.0/
-│       ├── docker-compose.yml
-│       └── moodle/        # Moodle source code
+│   ├── 4.0/
+│   │   ├── docker-compose.yml
+│   │   └── moodle/        # Auto-cloned on first deploy
+│   ├── 4.1/
+│   ├── 4.2/
+│   ├── 4.3/
+│   ├── 4.4/
+│   ├── 4.5/
+│   ├── 5.0/
+│   └── 5.1/
 ```
 
 ## Requirements
 
 - Linux VPS (Ubuntu, Debian, CentOS, RHEL, Fedora, Rocky, AlmaLinux)
 - Docker (script will install if missing)
-- Git
+- Git (for automatic Moodle source download)
 - Root/sudo access (for Docker installation and port 80)
+- ~400MB free disk space per Moodle version
 
 ## Troubleshooting
 
@@ -159,6 +178,11 @@ More versions coming. To add your own, create a folder in `versions/` with the s
 ```bash
 sudo chown -R www-data:www-data versions/4.0/moodle
 ```
+
+**Moodle source download failed?**
+- Check your internet connection
+- Verify you can reach github.com: `curl -s https://github.com`
+- Try manually: `git clone --depth 1 --branch MOODLE_450_STABLE https://github.com/moodle/moodle.git versions/4.5/moodle`
 
 **Container won't start?**
 ```bash
