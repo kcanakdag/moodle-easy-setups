@@ -171,10 +171,18 @@ ensure_moodle_source() {
         return 0
     fi
 
-    # Remove incomplete/empty moodle directory so git clone can succeed
+    # Directory exists but missing version.php — likely incomplete or custom setup
     if [ -d "$moodle_dir" ]; then
-        log_warn "Removing incomplete Moodle directory at $moodle_dir..."
-        rm -rf "$moodle_dir"
+        log_warn "Directory $moodle_dir exists but is missing version.php"
+        read -p "Remove it and re-clone Moodle source? (y/n): " confirm_remove
+        if [[ "$confirm_remove" =~ ^[Yy]$ ]]; then
+            log_warn "Removing directory..."
+            rm -rf "$moodle_dir"
+        else
+            log_error "Cannot proceed without a valid Moodle source directory."
+            log_info "Either restore version.php or manually remove the directory."
+            exit 1
+        fi
     fi
 
     # Check git is available
