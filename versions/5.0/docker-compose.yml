@@ -62,17 +62,6 @@ services:
     depends_on:
       - web
 
-  mail:
-    # Catch-all SMTP + web UI (Mailpit is what moodle-docker uses now)
-    image: axllent/mailpit:latest
-    container_name: moodle_mail_50
-    environment:
-      MP_SMTP_AUTH_ACCEPT_ANY: "1"
-      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
-    ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${MAILPIT_UI_PORT:-8025}:8025"   # Web UI
-      - "${BIND_ADDRESS:-127.0.0.1}:${MAILPIT_SMTP_PORT:-1025}:1025" # SMTP
-    restart: unless-stopped
 
 volumes:
   dbdata:

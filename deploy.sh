@@ -171,6 +171,12 @@ ensure_moodle_source() {
         return 0
     fi
 
+    # Remove incomplete/empty moodle directory so git clone can succeed
+    if [ -d "$moodle_dir" ]; then
+        log_warn "Removing incomplete Moodle directory at $moodle_dir..."
+        rm -rf "$moodle_dir"
+    fi
+
     # Check git is available
     if ! command -v git &> /dev/null; then
         log_error "git is required to download Moodle source code."
@@ -524,8 +530,6 @@ BIND_ADDRESS=${BIND_ADDRESS}
 WEB_PORT=${PORT}
 EXTRA_PORT_80=${extra_80}
 EXTRA_PORT_443=${extra_443}
-MAILPIT_UI_PORT=8025
-MAILPIT_SMTP_PORT=1025
 EOF
 
     log_success ".env file generated"
@@ -619,7 +623,6 @@ deploy() {
     echo -e "  Moodle URL:    ${BLUE}$WWWROOT${NC}"
     echo -e "  Admin User:    ${YELLOW}$ADMIN_USER${NC}"
     echo -e "  Admin Pass:    ${YELLOW}$ADMIN_PASS${NC}"
-    echo -e "  Mailpit UI:    ${BLUE}http://${DOMAIN}:8025${NC}"
     echo ""
     echo -e "  ${YELLOW}First time? Run the Moodle installer at the URL above.${NC}"
     echo ""
